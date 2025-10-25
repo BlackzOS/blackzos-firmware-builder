@@ -1,3 +1,0 @@
-# /etc/profile
-export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
-PS1='\u@\h:\w\$ '
