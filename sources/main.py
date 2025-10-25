@@ -16,7 +16,7 @@ from utils.create import (
 from utils.load import load_config
 
 from core.busybox import build_busybox
-from core.modify_rootfs import chroot
+from core.modify_rootfs import chroot, chroot_with_qemu
 
 
 
@@ -116,8 +116,13 @@ def main():
     # Downloads, Extracts, Configures, Compiles & Finnaly Installs Busybox into the RootFS
     busybox(args)
     
+    # Chroot into new RootFS
+    # chroot(busybox_src_dir=busybox_src_dir, rootfs_dir=rootfs_dir, arch=args.arch)
+    chroot_with_qemu(
+        rootfs_dir=rootfs_dir,
+        arch=args.arch
+    )
     
-   # chroot(busybox_src_dir=busybox_src_dir, rootfs_dir=rootfs_dir, arch=args.arch)
 
 
 if __name__ == "__main__":

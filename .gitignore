@@ -6,3 +6,7 @@ twine/*
 dist/*
 .backups
 .data/*
+work
+build
+output
+.data
