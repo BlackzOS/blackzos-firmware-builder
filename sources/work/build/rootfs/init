@@ -1,0 +1,6 @@
+#!/bin/sh
+echo "Starting minimal BusyBox init..."
+mount -t proc none /proc
+mount -t sysfs none /sys
+echo "Root filesystem ready."
+exec /bin/sh

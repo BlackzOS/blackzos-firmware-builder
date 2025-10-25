@@ -1,0 +1,24 @@
+{
+  "version": "1.36.1",
+  "url": "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
+  "src_dir": "work/busybox-{version}",
+  "cross_compile": {
+    "arch": "arm64",
+    "compiler_prefix": "aarch64-linux-gnu-",
+    "cflags": "-O2",
+    "ldflags": ""
+  },
+  "config_patch": [
+    "# Automatically generated config patch",
+    "CONFIG_STATIC=y",
+    "CONFIG_TC=n",
+    "# Disable toolchain-related extras",
+    "CONFIG_CROSS_COMPILER_PREFIX=\"\""
+  ],
+  "extra_config": {
+    "CONFIG_TC": "n",
+    "CONFIG_STATIC": "y",
+    "CONFIG_CROSS_COMPILER_PREFIX": "\"\""
+  },
+  "output_dir": "build"
+}
