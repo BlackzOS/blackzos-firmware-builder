@@ -1,6 +1,11 @@
 {
+  "name": "busybox",
   "version": "1.36.1",
-  "url": "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
+  "urls": [
+    "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
+    "https://distfiles.gentoo.org/distfiles/busybox-1.36.1.tar.bz2",
+    "https://sources.openwrt.org/busybox-1.36.1.tar.bz2"
+  ],
   "src_dir": "work/busybox-{version}",
   "cross_compile": {
     "arch": "arm64",
@@ -16,9 +21,9 @@
     "CONFIG_CROSS_COMPILER_PREFIX=\"\""
   ],
   "extra_config": {
-    "CONFIG_TC": "n",
     "CONFIG_STATIC": "y",
+    "CONFIG_TC": "n",
     "CONFIG_CROSS_COMPILER_PREFIX": "\"\""
   },
-  "output_dir": "build"
+  "output_dir": "work/build"
 }

@@ -1,6 +1,6 @@
 from pathlib import Path
 from utils.load import load_config
-from utils.download import download_file, extract_tarball
+from utils.download import download_file, extract_archive
 from utils.execute import run_command_live, run_command
 import os
 import multiprocessing
@@ -59,7 +59,7 @@ def build_busybox(args, work_dir: Path, downloads_dir: Path, rootfs_dir: Path):
     # Load Config
     config = load_config(Path("configs") / args.config)
     version = config["version"]
-    url = config["url"]
+    urls = config.get("urls", {})
     
     src_dir_template = config["src_dir"]    
     busybox_src_dir = Path(src_dir_template.format(version=version))
@@ -89,10 +89,10 @@ def build_busybox(args, work_dir: Path, downloads_dir: Path, rootfs_dir: Path):
 
     # Download & Extract
     print(f"Console > Lade BusyBox {version} herunter...")
-    tarball = download_file(url, downloads_dir)
+    tarball = download_file(urls, downloads_dir)
 
     print(f"Console > Entpacke BusyBox {version}...")
-    extracted_dir = extract_tarball(tarball, work_dir)
+    extracted_dir = extract_archive(tarball, work_dir)
 
     # Get Source Location
     subdirs = [d for d in extracted_dir.iterdir() if d.is_dir()]
