@@ -28,10 +28,12 @@ from core.busybox import build_busybox
 from core.modify_rootfs import chroot_with_qemu
 
 
-from manager.builder import PackageBuilder
 
 #from manager.pkg import build_all
 from manager.manager import build_all
+
+
+from manager.package_manager import build_opkg
 
 
 # ---------------------------
@@ -146,7 +148,8 @@ def main():
     build_all(args, configs_dir, work_dir, downloads_dir, rootfs_dir)
     
 
-
+    build_opkg(args.arch)
+    
     # Chroot into new RootFS
     # chroot(busybox_src_dir=busybox_src_dir, rootfs_dir=rootfs_dir, arch=args.arch)
     chroot_with_qemu(

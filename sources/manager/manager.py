@@ -6,8 +6,88 @@ from utils.download import download_file, extract_archive
 from utils.execute import run_command_live
 from utils.load import load_config
 
+
+# ──────────────────────────────────────────────
+#  Host-Tools, die nicht gebaut werden
+# ──────────────────────────────────────────────
+# Host-Tools: Werden nicht gebaut, dienen nur als bekannte Abhängigkeiten
+# Host-Tools: werden nicht gebaut, dienen nur als bekannte Abhängigkeiten
+HOST_TOOLS = [
+    "perl",
+    "python3",
+    "glib2",
+    "pkgconf",
+    "device-mapper",
+    "libudev",
+    "libusb",
+    "bash",
+    "util-linux",
+    "meson",
+    "ninja",
+    "gpgme",
+    "json-glib",
+    "libsoup",
+    "libdevmapper"
+]
+
+
+
+# ──────────────────────────────────────────────
+#  Spezielle Host-Abhängigkeiten pro Paket
+# ──────────────────────────────────────────────
+PACKAGE_HOST_DEPS = {
+    "fwupd": ["libusb"],
+    "lvm2": ["device-mapper"],
+    "inxi": ["perl"]
+}
+
+
+# ──────────────────────────────────────────────
+#  Pakete laden + Host-Abhängigkeiten mergen
+# ──────────────────────────────────────────────
+def load_all_packages(configs_dir: Path) -> dict:
+    packages = {}
+
+    # Zuerst Host-Tools als virtuelle Pakete anlegen
+    for host_tool in HOST_TOOLS:
+        packages[host_tool] = {
+            "name": host_tool,
+            "version": "host",
+            "urls": [],
+            "src_dir": "",
+            "deps": [],
+            "configure": []
+        }
+
+    # Jetzt JSON-Pakete laden
+    for cfg_file in (configs_dir / "packages").glob("*.json"):
+        conf = load_config(cfg_file)
+
+        # Basisabsicherung
+        conf.setdefault("deps", [])
+        conf.setdefault("configure", [])
+
+        # Paketname muss eindeutig sein
+        name = conf["name"]
+        if name in packages:
+            print(f"⚠️  Überschreibe vorhandenes Paket: {name}")
+        packages[name] = conf
+
+        # Host-Abhängigkeiten mergen
+        if name in PACKAGE_HOST_DEPS:
+            for dep in PACKAGE_HOST_DEPS[name]:
+                if dep not in conf["deps"]:
+                    conf["deps"].append(dep)
+
+    return packages
+
+
+# ──────────────────────────────────────────────
+#  Abhängigkeitsauflösung
+# ──────────────────────────────────────────────
 def resolve_build_order(packages: dict) -> list[str]:
     visited, order = {}, []
+
     def visit(name: str):
         if name in visited:
             if visited[name] == "temp":
@@ -20,63 +100,103 @@ def resolve_build_order(packages: dict) -> list[str]:
             visit(dep)
         visited[name] = "perm"
         order.append(name)
+
     for pkg in packages:
         visit(pkg)
+
     return order
 
-def load_all_packages(configs_dir: Path) -> dict:
-    packages = {}
-    for cfg_file in (configs_dir / "packages").glob("*.json"):
-        conf = load_config(cfg_file)
-        packages[conf["name"]] = conf
-    return packages
 
+# ──────────────────────────────────────────────
+#  Generischer Builder
+# ──────────────────────────────────────────────# ──────────────────────────────────────────────
+#  Generischer Builder mit GCC Multilib-Fix
+# ──────────────────────────────────────────────
 def build_generic(args, conf, work_dir: Path, downloads_dir: Path, rootfs_dir: Path):
-    version = conf["version"]
-    src_dir_template = conf["src_dir"]
-    src_dir = Path(src_dir_template.format(version=version))
+    # Host-Tool-Check
+    if conf.get("version") == "host":
+        print(f"⚡ {conf['name']} ist ein Host-Tool, überspringe Build.")
+        return
 
-    print(f"\n=== Baue Paket: {conf['name']} {version} ===")
+    name = conf["name"]
+    version = conf["version"]
+    src_dir = Path(conf["src_dir"].format(version=version))
+
+    print(f"\n=== Baue Paket: {name} {version} ===")
+
+    # Download & Entpacken
     tarball = download_file(conf["urls"], downloads_dir)
     extract_archive(tarball, work_dir)
-    print(f"Console > Quellverzeichnis: {src_dir}")
+    print(f"📂 Quellverzeichnis: {src_dir}")
 
-    # Cross-Compile Umgebung
-    env = os.environ.copy()
+    # Architektur-Setup
     arch = args.arch if args.arch else "x86_64"
-    host = "aarch64-linux-gnu" if arch in ("arm64", "aarch64") else "x86_64-linux-gnu"
-    prefix = "aarch64-linux-gnu-" if host.startswith("aarch64") else ""
-    env["CC"] = f"{prefix}gcc"
-    env["CXX"] = f"{prefix}g++"
+    env = os.environ.copy()
 
-    # Configure-Phase
-    if "configure" in conf:
-        # Exakte Vorgaben aus JSON (z.B. OpenSSL: ["perl","Configure","linux-aarch64",...])
-        cmd = conf["configure"]
-        run_command_live(cmd, cwd=src_dir, env=env, desc=f"{conf['name']}: custom configure")
+    if arch in ("x86_64", "amd64"):
+        host = "x86_64-linux-gnu"
+        env["CC"] = "gcc"
+        env["CXX"] = "g++"
+        arch_str = "x86_64"
+    elif arch in ("arm64", "aarch64"):
+        host = "aarch64-linux-gnu"
+        env["CC"] = "aarch64-linux-gnu-gcc"
+        env["CXX"] = "aarch64-linux-gnu-g++"
+        arch_str = "aarch64"
+    else:
+        raise RuntimeError(f"Unsupported architecture: {arch}")
+
+    # Configure
+    if conf.get("configure"):
+        # JSON liefert eigene Configure-Kommandos
+        cmd = [part.replace("{arch}", arch_str).replace("{rootfs}", str(rootfs_dir)) for part in conf["configure"]]
+        run_command_live(cmd, cwd=src_dir, env=env, desc=f"{name}: custom configure")
     else:
         configure_script = src_dir / "configure"
+        cmake_file = src_dir / "CMakeLists.txt"
+
         if configure_script.exists():
             cmd = ["./configure", f"--host={host}", "--prefix=/usr"]
-            run_command_live(cmd, cwd=src_dir, env=env, desc=f"{conf['name']}: configure")
+
+            # Automatisch --disable-multilib für gcc hinzufügen
+            if name == "gcc":
+                cmd.append("--disable-multilib")
+
+            run_command_live(cmd, cwd=src_dir, env=env, desc=f"{name}: configure")
+        elif cmake_file.exists():
+            build_dir = src_dir / "build"
+            build_dir.mkdir(exist_ok=True)
+            cmd = [
+                "cmake", "..",
+                f"-DCMAKE_INSTALL_PREFIX=/usr",
+                f"-DCMAKE_BUILD_TYPE=Release",
+                f"-DCMAKE_C_COMPILER={env['CC']}",
+                f"-DCMAKE_CXX_COMPILER={env['CXX']}"
+            ]
+            run_command_live(cmd, cwd=build_dir, env=env, desc=f"{name}: cmake configure")
         else:
-            print(f"⚠️  Kein configure-Skript gefunden und keine Vorgaben in JSON – überspringe configure.")
+            print(f"⚠️ Kein configure/CMakeLists.txt gefunden – überspringe configure.")
+            build_dir = src_dir
 
     # Build & Install
     num_cores = multiprocessing.cpu_count()
-    run_command_live(["make", f"-j{num_cores}"], cwd=src_dir, env=env, desc=f"{conf['name']}: build")
-    run_command_live(["make", f"DESTDIR={rootfs_dir}", "install"], cwd=src_dir, env=env, desc=f"{conf['name']}: install")
+    make_dir = build_dir if 'build_dir' in locals() else src_dir
+    run_command_live(["make", f"-j{num_cores}"], cwd=make_dir, env=env, desc=f"{name}: build")
+    run_command_live(["make", f"DESTDIR={rootfs_dir}", "install"], cwd=make_dir, env=env, desc=f"{name}: install")
 
-    print(f"✅ {conf['name']} {version} erfolgreich installiert in {rootfs_dir}")
+    print(f"✅ {name} {version} erfolgreich installiert in {rootfs_dir}")
 
 
-
+# ──────────────────────────────────────────────
+#  Alle Pakete in Abhängigkeitsreihenfolge bauen
+# ──────────────────────────────────────────────
 def build_all(args, configs_dir: Path, work_dir: Path, downloads_dir: Path, rootfs_dir: Path):
     packages = load_all_packages(configs_dir)
     build_order = resolve_build_order(packages)
     print(f"📦 Build-Reihenfolge: {', '.join(build_order)}")
 
     failed = []
+
     for name in build_order:
         conf = packages[name]
         try:
@@ -88,7 +208,6 @@ def build_all(args, configs_dir: Path, work_dir: Path, downloads_dir: Path, root
                 raise
             else:
                 print("➡️  Ignoriere Fehler und fahre mit dem nächsten Paket fort.")
-                continue
 
     if failed:
         print("\n⚠️ Folgende Pakete konnten nicht gebaut werden:")

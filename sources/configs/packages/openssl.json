@@ -9,12 +9,12 @@
   "deps": ["zlib"],
   "configure": [
     "perl", "Configure",
-    "linux-aarch64",
+    "linux-{arch}",
     "--prefix=/usr",
     "--openssldir=/etc/ssl",
     "shared",
     "zlib",
-    "--with-zlib-include=/home/blackleakz/Entwicklung/blackzos-firmware-builder/sources/work/rootfs/usr/include",
-    "--with-zlib-lib=/home/blackleakz/Entwicklung/blackzos-firmware-builder/sources/work/rootfs/usr/lib"
+    "--with-zlib-include={rootfs}/usr/include",
+    "--with-zlib-lib={rootfs}/usr/lib"
   ]
 }

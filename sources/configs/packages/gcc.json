@@ -6,5 +6,11 @@
     "https://mirrors.kernel.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.gz"
   ],
   "src_dir": "work/gcc-{version}",
-  "deps": ["binutils", "gmp", "mpfr", "mpc", "zlib"]
+  "deps": ["binutils", "gmp", "mpfr", "mpc", "zlib"],
+  "configure": [
+    "./configure",
+    "--prefix=/usr",
+    "--disable-multilib",
+    "--enable-languages=c,c++"
+  ]
 }
